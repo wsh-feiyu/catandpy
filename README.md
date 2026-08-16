@@ -21,15 +21,19 @@ catandpy/
 │   ├── Hmys.js
 │   ├── 火花影视.js
 │   └── 火花影视.py
-├── fongmi-tv-js/             # 从 TV apk 提取的真实运行时文件（勿删）
-│   └── lib/
+├── fongmi-tv-js/             # 从 TV apk 提取的真实运行时文件（勿删，JS 源调试依赖）
+│   └── lib/                  # cat.js / cheerio.min.js / gbk.js / similarity.js / http.js
 ├── spider-studio/            # 框架本体
 │   ├── public/               # 前端（编辑器 / 调试台 / 模拟器）
 │   ├── server/               # 后端服务与运行时
 │   │   ├── index.js          # Express 主服务
 │   │   ├── js-runtime.js     # JS 源 mock 运行时
 │   │   ├── py-runner.js      # PY 源运行器
-│   │   └── ext-config.json   # 各源 ext 参数持久化存储
+│   │   ├── ext-config.json   # 各源 ext 参数持久化存储
+│   │   ├── crypto-js.js      # 参考代码：完整 crypto-js 库
+│   │   ├── spider.js         # 参考代码：TVBox 加载 spider 入口片段
+│   │   ├── jquery.min.js     # 参考代码：jQuery 库
+│   │   └── script.js         # 参考代码：TVBox 前端脚本逻辑
 │   └── package.json
 └── README.md
 ```
