@@ -14,10 +14,14 @@ const { runJsSource } = require('./js-runtime');
 const { runPySource, detectPython } = require('./py-runner');
 const { getTemplates, generateWizardSource } = require('./templates');
 
-// 源文件根目录：框架目录（spider-studio）的上一级，即用户存放 .js/.py 源的目录
-const ROOT = path.resolve(__dirname, '..', '..');
+// 源文件根目录：项目根目录下的 sources/，用户存放 .js/.py 源的工作区
+// 可通过环境变量 TVBOX_SOURCE_DIR 覆盖（如指向其它盘符/目录）
+const ROOT = process.env.TVBOX_SOURCE_DIR || path.resolve(__dirname, '..', '..', 'sources');
 const PUB = path.join(__dirname, '..', 'public');
 const PORT = process.env.PORT || 8737;
+
+// 源目录不存在时自动创建（首次克隆运行即可用）
+if (!fs.existsSync(ROOT)) fs.mkdirSync(ROOT, { recursive: true });
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
