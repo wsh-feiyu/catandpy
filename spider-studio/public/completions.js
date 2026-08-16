@@ -428,9 +428,53 @@ function registerCompletions() {
   });
 }
 
-// ============ JS 全局类型声明（让悬停显示签名而非裸 any） ============
-// 由补全项自动生成 declare function / declare const，注入 JS 语言服务，
-// 使 req / aesX / joinUrl 等全局函数在悬停时显示正确签名。
+// ============ JS 全局类型声明（让悬停显示签名与中文文档而非裸 any） ============
+// 由补全项自动生成带 JSDoc 的 declare function / declare const，注入 JS 语言服务。
+// TS 语言服务原生解析 JSDoc 并显示在悬停里（已实测有效），参数类型做常见推断，
+// 使 req / aesX / joinUrl 等全局函数悬停时显示有意义的中文说明与签名，
+// 并让 req().content、pd() 等返回值有类型，从而 .replace 不再悬停成 any。
+const RET_TYPES = {
+  req: 'TVBoxResp & Promise<TVBoxResp>',
+  http: 'TVBoxResp & Promise<TVBoxResp>',
+  pd: 'string',
+  pdyh: 'string',
+  pdfh: 'string',
+  pdfl: 'any[]',
+  pdfa: 'any[]',
+  md5X: 'string',
+  MD5: 'string',
+  'base64.encode': 'string',
+  'base64.decode': 'string',
+  'base64.b64encode': 'string',
+  'base64.b64decode': 'any',
+  joinUrl: 'string',
+  getProxy: 'string',
+  js2Proxy: 'string & Promise<string>',
+  sniff: 'string',
+  compareTwoStrings: 'number',
+  'local.set': 'void',
+  gbkTool: '{ encode(s: string): string; decode(s: string): string }',
+  findBestMatch: '{ bestMatch: { target: string; rating: number }; bestMatchIndex: number; ratings: any[] }',
+};
+
+function guessParamType(name) {
+  const n = String(name).toLowerCase();
+  if (n === 'encrypt' || n === 'pub' || n === 'inbase64' || n === 'outbase64' || n === 'quick' || n === 'filter' || n === 'dynamic' || n === 'local' || n === 'verify' || n === 'async' || n === 'clean') return 'boolean';
+  if (n === 'pg' || n === 'code' || n === 'timeout' || n === 'index' || n === 'versioncode') return 'number';
+  if (n === 'ids' || n === 'flags' || n === 'vipflags' || n === 'args' || n === 'targets' || n === 'list' || n === 'extras') return 'any[]';
+  if (n === 'opt' || n === 'options' || n === 'ext' || n === 'extend' || n === 'headers' || n === 'data' || n === 'conf') return 'object';
+  return 'string';
+}
+
+// 把补全项的 detail/doc 转成 JSDoc 注释，TS 语言服务会在悬停时显示
+function declDoc(s) {
+  const lines = [];
+  if (s.detail) lines.push(s.detail);
+  if (s.doc) lines.push.apply(lines, s.doc.split('\n'));
+  if (!lines.length) return '';
+  return '/**\n' + lines.map((l) => ' * ' + l.replace(/\*\//g, '* /')).join('\n') + '\n */\n';
+}
+
 function buildJsDeclarations() {
   const funcs = []; // 顶层函数
   const objMethods = {}; // 对象 -> 方法列表（如 base64.encode）
@@ -440,21 +484,34 @@ function buildJsDeclarations() {
     const full = m[1];
     const params = m[2]
       .split(',')
-      .map((p) => p.trim().replace(/^\.\.\./, ''))
+      .map((p) => p.trim())
       .filter(Boolean);
-    const sig = '(' + params.map((p) => p + ': any').join(', ') + '): any';
+    const paramStrs = params.map((p) => {
+      const isRest = p.indexOf('...') === 0;
+      const pn = isRest ? p.slice(3) : p;
+      return (isRest ? '...' : '') + pn + ': ' + guessParamType(pn);
+    });
+    const ret = RET_TYPES[full] || 'any';
+    const sig = '(' + paramStrs.join(', ') + '): ' + ret;
+    const doc = declDoc(s);
     const dot = full.indexOf('.');
     if (dot === -1) {
-      funcs.push('declare function ' + full + sig + ';');
+      funcs.push(doc + 'declare function ' + full + sig + ';');
     } else {
       const obj = full.slice(0, dot);
       const method = full.slice(dot + 1);
-      (objMethods[obj] = objMethods[obj] || []).push(method + sig);
+      (objMethods[obj] = objMethods[obj] || []).push(doc + method + sig + ';');
     }
   }
   const lines = funcs.slice();
   for (const obj of Object.keys(objMethods)) {
-    lines.push('declare const ' + obj + ': { ' + objMethods[obj].join('; ') + ' };');
+    lines.push('declare const ' + obj + ': {\n' + objMethods[obj].join('\n') + '\n};');
+  }
+  // req/http 返回「对象 + Promise」交叉类型：既可 await 也可直接 .content，需先注入接口定义
+  if (lines.join('\n').indexOf('TVBoxResp') !== -1) {
+    lines.unshift(
+      'interface TVBoxResp {\n  content: string;\n  code: number;\n  json(): any;\n  html(): string;\n}'
+    );
   }
   return lines.join('\n');
 }
