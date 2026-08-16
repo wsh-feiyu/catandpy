@@ -11,6 +11,9 @@ spider-studio/server/out_tmp.json
 # 调试/验证临时脚本（spider-studio 根目录下以 _ 开头的 .js）
 spider-studio/_*.js
 
+# 源文件工作区（私有源，不推送到仓库）
+sources/
+
 # 系统文件
 .DS_Store
 Thumbs.db
