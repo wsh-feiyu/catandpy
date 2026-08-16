@@ -2,7 +2,7 @@
  * JS 源 mock 运行时
  *
  * 在 Node 中尽量还原 FongMi/TV 猫源 QuickJS 环境：
- *   - 直接复用 fongmi-tv-js/lib 里从 TV apk 提取的真实运行时文件：
+ *   - 直接复用 spider-studio/server/tvbox-lib 里从 TV apk 提取的真实运行时文件：
  *     cat.js / cheerio.min.js / gbk.js / similarity.js / http.js
  *   - 注入 req / http / aesX / md5X / sniff / base64 / pd / pdfh / pdfa / pdyh / pdfl / json / html 等全局函数
  *   - http.js 底层依赖的真机原生 _http 用 Node fetch 模拟
@@ -16,14 +16,14 @@ const path = require('path');
 const vm = require('vm');
 
 // ============ 真实 lib（从 TV apk 提取） ============
-// fongmi-tv-js/lib/ 是 TVBox 猫源运行时的真实工具库：
+// spider-studio/server/tvbox-lib/ 是 TVBox 猫源运行时的真实工具库：
 //   cat.js          -> Crypto / dayjs / cheerio / _ / jp / Uri / load / parseHTML ...
 //   cheerio.min.js  -> load(default) / parseHTML / html / merge / contains ...
 //   gbk.js          -> gbkTool() 工厂（返回 encode/decode）
 //   similarity.js   -> compareTwoStrings / findBestMatch / findBestLCS
 //   http.js         -> http / req（依赖真机原生 _http，由 mock 提供）
 // 调试时直接复用它们，保证与真机行为一致。
-const LIBS_DIR = path.join(__dirname, '..', '..', 'fongmi-tv-js', 'lib');
+const LIBS_DIR = path.join(__dirname, 'tvbox-lib');
 const REAL_LIBS = {
   cat: path.join(LIBS_DIR, 'cat.js'),
   cheerio: path.join(LIBS_DIR, 'cheerio.min.js'),
