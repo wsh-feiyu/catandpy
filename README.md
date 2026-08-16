@@ -5,7 +5,7 @@ TVBox 的 JS / Python 源编写与调试框架，参考 [FongMi/TV](https://gith
 
 ## 功能特性
 
-- **Monaco 代码编辑器**：语法高亮、函数自动补全（`req` / `http` / `aesX` / `md5X` / `desX` / `pd` / `pdfh` / `pdfa` / `cheerio` 等 TVBox 全局 API）。
+- **Monaco 代码编辑器**：语法高亮、函数自动补全（`req` / `http` / `aesX` / `desX` / `rsaX` / `joinUrl` / `md5X` / `pd` / `pdfh` / `pdfa` / `cheerio` 等 TVBox 全局 API）。
 - **JS 源运行时**：在 Node.js 的 `vm` 中模拟 FongMi 猫源 QuickJS 环境，直接复用从 TV apk 提取的真实运行时文件（`cat.js` / `cheerio.min.js` / `gbk.js` / `similarity.js` / `http.js`），行为与真机一致。
 - **PY 源运行时**：通过本机 Python 解释器 + mock `base.spider` 执行 `.py` 源。
 - **调试台**：选择方法（`home` / `category` / `detail` / `play` / `search`…）、填写参数与 ext，一键运行并查看返回结果、日志、HTTP 请求记录。
@@ -97,6 +97,23 @@ npm start
 3. 按需填写方法参数与 ext 键值对。
 4. 点「运行」，在下方标签页查看：**结果**、**日志**、**请求**、**错误**。
 
+### JS 全局 API 参考
+
+运行时按 FongMi/TV 规范注入以下全局函数（均可在编辑器内补全）：
+
+| 函数 | 签名 | 说明 |
+| --- | --- | --- |
+| `aesX` | `aesX(mode, encrypt, input, inBase64, key, iv, outBase64)` | AES 加解密，`mode` 如 `AES/CBC/PKCS7Padding`、`AES/ECB/No`；CBC 时传 `iv`，ECB 传 `null` |
+| `desX` | `desX(mode, encrypt, input, inBase64, key, iv, outBase64)` | 3DES 加解密，`mode` 如 `DESede/CBC/PKCS7Padding` |
+| `rsaX` | `rsaX(mode, pub, encrypt, input, inBase64, key, outBase64)` | RSA 加解密，`mode` 为 `RSA/PKCS1` 或 `RSA/None/NoPadding`；`key` 支持 PEM 或裸 base64（由 Node `crypto` 实现，cat.js 的 CryptoJS 不支持 RSA） |
+| `joinUrl` | `joinUrl(parent, child)` | URL 拼接，`child` 为绝对地址（含 scheme / `//`）时直接返回，否则基于 `parent` 拼接 |
+| `md5X` | `md5X(str)` | MD5 十六进制哈希 |
+| `getProxy` | `getProxy(local)` | 返回本地代理地址 |
+| `js2Proxy` | `js2Proxy(dynamic, siteType, siteKey, url, headers)` | 返回播放代理地址 |
+| `req` / `http` | `req(url, opt)` | HTTP 请求，返回 `{content, code, json(), html()}` |
+
+其余 `pd` / `pdfh` / `pdfa` / `pdyh` / `pdfl` / `sniff` / `base64` / `json` / `html` / `importJs` 等与真机一致。
+
 ### 调试 PY 源
 
 步骤同上，方法名对应 `homeContent` / `categoryContent` / `detailContent` / `searchContent` / `playerContent`。
@@ -127,4 +144,4 @@ npm start
 
 ## 参考规范
 
-- [FongMi/TV SPIDER.md](https://github.com/FongMi/TV/blob/main/spider/README.md)
+- [FongMi/TV SPIDER.md](https://github.com/FongMi/TV/blob/fongmi/docs/SPIDER.md)

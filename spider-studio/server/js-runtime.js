@@ -14,6 +14,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const nodeCrypto = require('crypto'); // 用于 rsaX（cat.js 的 CryptoJS 不支持 RSA）
 
 // ============ 真实 lib（从 TV apk 提取） ============
 // spider-studio/server/tvbox-lib/ 是 TVBox 猫源运行时的真实工具库：
@@ -319,9 +320,17 @@ function buildSandbox({ logs, requests, sourcePath }) {
   const http = httpLib && httpLib.httpHttp ? httpLib.httpHttp : nativeHttp;
 
   // aesX：还原 FongMi cat 的 AES 封装（基于真实 cat.js 的 Crypto）
-  // 参数: aesX(mode, inBase64, data, isBase64, key, outBase64, isNoPadding)
+  // 标准签名（与 FongMi Global.java 一致）:
+  //   aesX(mode, encrypt, input, inBase64, key, iv, outBase64)
+  //   - mode: 算法模式，如 "AES/CBC/PKCS7Padding"、"AES/ECB/No"
+  //   - encrypt: true=加密, false=解密
+  //   - input: 待处理数据
+  //   - inBase64: 输入是否为 base64 编码
+  //   - key: 密钥
+  //   - iv: 偏移向量（ECB 时忽略，可传 null）
+  //   - outBase64: 输出是否为 base64 编码
   const CatCrypto = catExports.Crypto || {};
-  function aesX(mode, inBase64, data, isBase64, key, outBase64, isNoPadding) {
+  function aesX(mode, encrypt, input, inBase64, key, iv, outBase64) {
     if (outBase64 === undefined || outBase64 === null) outBase64 = inBase64;
     const m = /^([A-Z0-9]+)\/([A-Z0-9]+)\/(.*)$/i.exec(String(mode));
     const algo = (m && m[1].toUpperCase()) || 'AES';
@@ -333,23 +342,26 @@ function buildSandbox({ logs, requests, sourcePath }) {
     if (/PKCS5/i.test(paddingName || '')) padding = CatCrypto.pad.Pkcs7;
 
     // 解析 key / 输入
-    const keyWA = isBase64 ? CatCrypto.enc.Base64.parse(String(key)) : CatCrypto.enc.Utf8.parse(String(key));
+    const keyWA = CatCrypto.enc.Utf8.parse(String(key));
     let dataWA;
-    if (inBase64) dataWA = CatCrypto.enc.Base64.parse(String(data));
-    else dataWA = CatCrypto.enc.Utf8.parse(String(data));
+    if (inBase64) dataWA = CatCrypto.enc.Base64.parse(String(input));
+    else dataWA = CatCrypto.enc.Utf8.parse(String(input));
 
     const modeObj = transform === 'CBC' ? CatCrypto.mode.CBC : CatCrypto.mode.ECB;
+    const cfg = { mode: modeObj, padding };
+    if (modeObj === CatCrypto.mode.CBC && iv != null) {
+      cfg.iv = CatCrypto.enc.Utf8.parse(String(iv));
+    }
 
     let result;
-    if (inBase64) {
+    if (encrypt) {
+      // 加密
+      const enc = CatCrypto.AES.encrypt(dataWA, keyWA, cfg);
+      result = enc.ciphertext;
+    } else {
       // 解密
       const cipherParams = CatCrypto.lib.CipherParams.create({ ciphertext: dataWA });
-      const dec = CatCrypto.AES.decrypt(cipherParams, keyWA, { mode: modeObj, padding });
-      result = dec;
-    } else {
-      // 加密
-      const enc = CatCrypto.AES.encrypt(dataWA, keyWA, { mode: modeObj, padding });
-      result = enc.ciphertext;
+      result = CatCrypto.AES.decrypt(cipherParams, keyWA, cfg);
     }
     // 输出
     if (outBase64) {
@@ -363,9 +375,9 @@ function buildSandbox({ logs, requests, sourcePath }) {
   }
 
   // desX：还原 FongMi cat 的 3DES 封装（与 aesX 同签名）
-  // 参数: desX(mode, inBase64, data, isBase64, key, outBase64, isNoPadding)
-  // mode 形如 "DESede/CBC/PKCS7Padding"（DESEDE=3DES），inBase64=true 表示 data 为 base64 密文（解密）
-  function desX(mode, inBase64, data, isBase64, key, outBase64, isNoPadding) {
+  // 标准签名: desX(mode, encrypt, input, inBase64, key, iv, outBase64)
+  // mode 形如 "DESede/CBC/PKCS7Padding"（DESEDE=3DES）
+  function desX(mode, encrypt, input, inBase64, key, iv, outBase64) {
     if (outBase64 === undefined || outBase64 === null) outBase64 = inBase64;
     const m = /^([A-Z0-9]+)\/([A-Z0-9]+)\/(.*)$/i.exec(String(mode));
     const algo = ((m && m[1]) || 'DESEDE').toUpperCase();
@@ -376,21 +388,109 @@ function buildSandbox({ logs, requests, sourcePath }) {
     if (/Zero/i.test(paddingName || '')) padding = CatCrypto.pad.ZeroPadding;
 
     const cipher = /DESEDE/i.test(algo) ? CatCrypto.TripleDES : CatCrypto.DES;
-    const keyWA = isBase64 ? CatCrypto.enc.Base64.parse(String(key)) : CatCrypto.enc.Utf8.parse(String(key));
+    const keyWA = CatCrypto.enc.Utf8.parse(String(key));
     let dataWA;
-    if (inBase64) dataWA = CatCrypto.enc.Base64.parse(String(data));
-    else dataWA = CatCrypto.enc.Utf8.parse(String(data));
+    if (inBase64) dataWA = CatCrypto.enc.Base64.parse(String(input));
+    else dataWA = CatCrypto.enc.Utf8.parse(String(input));
     const modeObj = transform === 'CBC' ? CatCrypto.mode.CBC : CatCrypto.mode.ECB;
+    const cfg = { mode: modeObj, padding };
+    if (modeObj === CatCrypto.mode.CBC && iv != null) {
+      cfg.iv = CatCrypto.enc.Utf8.parse(String(iv));
+    }
 
     let result;
-    if (inBase64) {
-      const cipherParams = CatCrypto.lib.CipherParams.create({ ciphertext: dataWA });
-      result = cipher.decrypt(cipherParams, keyWA, { mode: modeObj, padding });
+    if (encrypt) {
+      result = cipher.encrypt(dataWA, keyWA, cfg).ciphertext;
     } else {
-      result = cipher.encrypt(dataWA, keyWA, { mode: modeObj, padding }).ciphertext;
+      const cipherParams = CatCrypto.lib.CipherParams.create({ ciphertext: dataWA });
+      result = cipher.decrypt(cipherParams, keyWA, cfg);
     }
     if (outBase64) return CatCrypto.enc.Base64.stringify(result);
     return CatCrypto.enc.Utf8.stringify(result);
+  }
+
+  // joinUrl：URL 拼接（FongMi Global.java 的 joinUrl）
+  // 若 child 是绝对地址（含 scheme 或 //）则直接返回 child，否则基于 parent 拼接
+  function joinUrl(parent, child) {
+    parent = String(parent || '');
+    child = String(child || '');
+    if (!child) return parent;
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(child)) return child; // 已有 scheme
+    if (/^\/\//.test(child)) { // 协议相对
+      const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(parent);
+      return (scheme ? scheme[1] : 'http') + ':' + child;
+    }
+    if (/^\//.test(child)) { // 绝对路径，保留 parent 的 host
+      const m = /^(https?:\/\/[^/?#]+)/i.exec(parent);
+      return m ? m[1] + child : parent.replace(/\/+$/, '') + child;
+    }
+    // 相对路径：去掉 parent 末尾文件，拼 child
+    const base = parent.replace(/^([^?#]*)\/.*$/, '$1').replace(/\/+$/, '');
+    return base + '/' + child;
+  }
+
+  // rsaX：RSA 加解密（FongMi Global.java / Crypto.rsa，用 Node crypto 实现）
+  // 标准签名: rsaX(mode, pub, encrypt, input, inBase64, key, outBase64)
+  //   - mode: "RSA/PKCS1"（默认）或 "RSA/None/NoPadding"
+  //   - pub: true=公钥, false=私钥
+  //   - encrypt: true=加密, false=解密
+  //   - input: 待处理数据
+  //   - inBase64: 输入是否为 base64 编码
+  //   - key: PEM 或裸 base64 密钥（自动去除 PEM 头尾）
+  //   - outBase64: 输出是否为 base64 编码
+  function rsaX(mode, pub, encrypt, input, inBase64, key, outBase64) {
+    try {
+      if (outBase64 === undefined || outBase64 === null) outBase64 = inBase64;
+      const rsaKey = rsaGenerateKey(pub, key);
+      let inBuf;
+      if (inBase64) inBuf = Buffer.from(String(input).replace(/_/g, '/').replace(/-/g, '+'), 'base64');
+      else inBuf = Buffer.from(String(input), 'utf-8');
+      let transformation = 'RSA/ECB/PKCS1Padding';
+      if (String(mode) === 'RSA/PKCS1') transformation = 'RSA/ECB/PKCS1Padding';
+      else if (String(mode) === 'RSA/None/NoPadding') transformation = 'RSA/None/NoPadding';
+      let outBuf;
+      if (encrypt) {
+        outBuf = rsaEncrypt(transformation, rsaKey, inBuf, pub);
+      } else {
+        outBuf = rsaDecrypt(transformation, rsaKey, inBuf, pub);
+      }
+      if (outBase64) return outBuf.toString('base64');
+      return outBuf.toString('utf-8');
+    } catch (e) {
+      logs.push('[rsaX-error] ' + e.message);
+      return '';
+    }
+  }
+
+  // 生成 Node RSA KeyObject（支持 PEM 与裸 base64，兼容字面 \n 与真实换行）
+  function rsaGenerateKey(pub, key) {
+    let k = String(key || '').replace(/\\n/g, '\n'); // 字面 \n -> 换行
+    const hasPem = /-----BEGIN/.test(k);
+    k = k.replace(/[\r\n]+/g, '').trim(); // 只去换行，保留空格（PEM 头尾标记含空格）
+    if (!hasPem) {
+      // 裸 base64：包成 PEM
+      const b64 = k.replace(/-/g, '+').replace(/_/g, '/');
+      const buf = Buffer.from(b64, 'base64');
+      const body = buf.toString('base64').replace(/(.{64})/g, '$1\n');
+      k = (pub ? '-----BEGIN PUBLIC KEY-----\n' : '-----BEGIN PRIVATE KEY-----\n') + body + '\n' + (pub ? '-----END PUBLIC KEY-----' : '-----END PRIVATE KEY-----');
+    } else {
+      // 已有 PEM 头尾：按 64 字符重新折行
+      const header = /-----BEGIN (.*?)-----/.exec(k);
+      const footer = /-----END (.*?)-----/.exec(k);
+      const body = k.replace(/-----BEGIN [A-Z ]+-----/, '').replace(/-----END [A-Z ]+-----/, '');
+      k = '-----BEGIN ' + header[1] + '-----\n' + body.replace(/(.{64})/g, '$1\n') + '\n-----END ' + footer[1] + '-----';
+    }
+    return pub ? nodeCrypto.createPublicKey(k) : nodeCrypto.createPrivateKey(k);
+  }
+
+  // 加解密（区分公钥/私钥方向）
+  function rsaEncrypt(transformation, key, buf, pub) {
+    const opts = { key, padding: /NoPadding/.test(transformation) ? nodeCrypto.constants.RSA_NO_PADDING : nodeCrypto.constants.RSA_PKCS1_PADDING };
+    return pub ? nodeCrypto.publicEncrypt(opts, buf) : nodeCrypto.privateEncrypt(opts, buf);
+  }
+  function rsaDecrypt(transformation, key, buf, pub) {
+    const opts = { key, padding: /NoPadding/.test(transformation) ? nodeCrypto.constants.RSA_NO_PADDING : nodeCrypto.constants.RSA_PKCS1_PADDING };
+    return pub ? nodeCrypto.publicDecrypt(opts, buf) : nodeCrypto.privateDecrypt(opts, buf);
   }
 
   async function sniff(url) {
@@ -456,8 +556,15 @@ function buildSandbox({ logs, requests, sourcePath }) {
   };
 
   // js2Proxy：真机返回播放代理地址；调试环境返回一个占位标记（实际播放 URL 由 play 直接给出）
-  function js2Proxy(flag, siteType, siteKey, url, header) {
+  // 标准签名: js2Proxy(dynamic, siteType, siteKey, url, headers)
+  function js2Proxy(dynamic, siteType, siteKey, url, headers) {
     return 'js2proxy://' + siteType + '/' + siteKey + '/' + url;
+  }
+
+  // getProxy：返回本机代理地址（FongMi Global.java），调试环境返回占位代理 URL
+  function getProxy(local) {
+    const addr = local ? 'http://127.0.0.1' : 'http://127.0.0.1';
+    return addr + '/proxy?do=js';
   }
 
   // 基本浏览器 API 兜底
@@ -467,6 +574,8 @@ function buildSandbox({ logs, requests, sourcePath }) {
     http,
     aesX,
     desX,
+    joinUrl,
+    rsaX,
     md5X,
     MD5: CatCrypto.MD5 || md5X,
     sniff,
@@ -482,7 +591,7 @@ function buildSandbox({ logs, requests, sourcePath }) {
     importJs,
     local,
     js2Proxy,
-    getProxy: (p) => { logs.push('[getProxy] ' + p + ' （调试环境返回原样）'); return p; },
+    getProxy,
     atob: (s) => Buffer.from(String(s), 'base64').toString('binary'),
     btoa: (s) => Buffer.from(String(s), 'binary').toString('base64'),
     fetch,
