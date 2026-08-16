@@ -38,41 +38,63 @@
       <div id="editor"></div>
     </section>
 
-    <!-- 右侧调试面板 -->
+    <!-- 右侧面板：调试台 + 模拟器（共用一个宽度，tab 切换） -->
     <aside id="debug">
-      <div class="d-header">调试台 — 模拟 TVBox 运行时</div>
-      <div class="d-body">
-        <div>
-          <label>调用方法</label>
-          <select id="dbg-method"></select>
-        </div>
-        <div>
-          <label id="dbg-args-label">参数（JSON）</label>
-          <textarea id="dbg-args" placeholder='["电影","1",true,{}]'></textarea>
-        </div>
-        <div class="row">
-          <div>
-            <label>ext / extend 参数</label>
-            <input id="dbg-ext" value="{}" placeholder='{"key":"xxx","version":"1.0"}' />
-          </div>
-          <button id="btn-run" class="primary" style="flex:none;padding:7px 18px;">运行</button>
-        </div>
-        <div class="row">
-          <div>
-            <label id="dbg-fast-label">快速填充默认参数</label>
-            <select id="dbg-fast"></select>
-          </div>
-        </div>
+      <div class="side-tabs">
+        <button class="side-tab active" id="tab-dbg" data-pane="pane-dbg">调试台 — 模拟 TVBox 运行时</button>
+        <button class="side-tab" id="tab-sim" data-pane="pane-sim">模拟器</button>
+      </div>
 
-        <div id="result-area">
-          <div id="result-tabs">
-            <div class="rtab active" data-tab="result">结果</div>
-            <div class="rtab" data-tab="logs">日志</div>
-            <div class="rtab" data-tab="requests">请求</div>
-            <div class="rtab" data-tab="stdout">stdout</div>
-            <div class="rtab" data-tab="error">错误</div>
+      <!-- 调试台 -->
+      <div class="side-pane" id="pane-dbg">
+        <div class="d-body">
+          <div>
+            <label>调用方法</label>
+            <select id="dbg-method"></select>
           </div>
-          <div id="result-view"><pre>运行后在此查看输出</pre></div>
+          <div>
+            <label id="dbg-args-label">参数（JSON）</label>
+            <textarea id="dbg-args" placeholder='["电影","1",true,{}]'></textarea>
+          </div>
+          <div class="row">
+            <div>
+              <label>ext / extend 参数</label>
+              <input id="dbg-ext" value="{}" placeholder='{"key":"xxx","version":"1.0"}' />
+            </div>
+            <button id="btn-run" class="primary" style="flex:none;padding:7px 18px;">运行</button>
+          </div>
+          <div class="row">
+            <div>
+              <label id="dbg-fast-label">快速填充默认参数</label>
+              <select id="dbg-fast"></select>
+            </div>
+          </div>
+
+          <div id="result-area">
+            <div id="result-tabs">
+              <div class="rtab active" data-tab="result">结果</div>
+              <div class="rtab" data-tab="logs">日志</div>
+              <div class="rtab" data-tab="requests">请求</div>
+              <div class="rtab" data-tab="stdout">stdout</div>
+              <div class="rtab" data-tab="error">错误</div>
+            </div>
+            <div id="result-view"><pre>运行后在此查看输出</pre></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 模拟器 -->
+      <div class="side-pane hidden" id="pane-sim">
+        <div class="sim-toolbar">
+          <input id="sim-search" placeholder="搜索影片…" />
+          <button id="sim-search-btn">搜索</button>
+        </div>
+        <div class="sim-nav">
+          <button id="sim-back" title="返回上一级">← 返回</button>
+          <button id="sim-refresh" title="从 init 重新加载">⟳ 刷新</button>
+        </div>
+        <div id="sim-screen">
+          <div class="sim-intro">在左侧打开一个源文件，然后切换到「模拟器」标签。<br />将自动从 init 运行并渲染分类与首页列表。</div>
         </div>
       </div>
     </aside>
@@ -128,5 +150,6 @@
 
   <script src="completions.js"></script>
   <script src="app.js"></script>
+  <script src="tvbox-sim.js"></script>
 </body>
 </html>

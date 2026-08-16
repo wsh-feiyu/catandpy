@@ -21,7 +21,13 @@ const PORT = process.env.PORT || 8737;
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
-app.use(express.static(PUB));
+// 开发工具：禁用静态资源缓存，避免浏览器缓存旧版 HTML/JS 导致页面异常
+app.use(express.static(PUB, {
+  setHeaders(res) {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+  },
+}));
 
 // 路径安全校验：只能访问 ROOT 内的文件
 function resolveSafe(p) {

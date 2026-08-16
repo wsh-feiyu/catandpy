@@ -133,6 +133,8 @@ async function openFile(name) {
     editor.setModel(model);
     setupDebug(type);
     highlightActive();
+    // 打开新源文件时重置模拟器，下次切到「模拟器」tab 自动按新文件重新加载
+    if (typeof simReset === 'function') simReset();
   } catch (e) {
     alert('打开失败: ' + e.message);
   }
