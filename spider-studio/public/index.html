@@ -57,17 +57,12 @@
             <textarea id="dbg-args" placeholder='["电影","1",true,{}]'></textarea>
           </div>
           <div class="row">
-            <div>
-              <label>ext / extend 参数</label>
-              <input id="dbg-ext" value="{}" placeholder='{"key":"xxx","version":"1.0"}' />
+            <div style="flex:1;">
+              <label>ext / extend 参数（键值对，自动生成 JSON）</label>
+              <div id="ext-fields"></div>
+              <button id="btn-add-ext" title="添加一个键值对" style="flex:none;padding:4px 10px;font-size:12px;margin-top:4px;">+ 添加键值</button>
             </div>
             <button id="btn-run" class="primary" style="flex:none;padding:7px 18px;">运行</button>
-          </div>
-          <div class="row">
-            <div>
-              <label id="dbg-fast-label">快速填充默认参数</label>
-              <select id="dbg-fast"></select>
-            </div>
           </div>
 
           <div id="result-area">

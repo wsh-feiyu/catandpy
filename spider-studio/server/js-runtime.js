@@ -34,6 +34,9 @@ const REAL_LIBS = {
 
 const _libCache = {}; // 模块级缓存：每个文件只解析一次
 
+// 模拟真机 QuickJS 的 local KV 存储：按源文件路径隔离命名空间，可跨调试请求持久化（如 deviceid）
+const _localStore = {}; // sourcePath -> { key: value }
+
 // 通用：把 ESM 文件的 `export{...};`（含 `export function xx`）改写为挂到 globalThis，再在独立 context 执行
 // exportClause 非空时直接替换末尾的 export{...}; 否则在源码末尾追加赋值语句
 function loadEsmLib(name) {
@@ -184,7 +187,7 @@ function formatUrl(url, base) {
 }
 
 // ============ 构建沙箱 ============
-function buildSandbox({ logs, requests }) {
+function buildSandbox({ logs, requests, sourcePath }) {
   // 加载真实 lib（从 TV apk 提取的 TVBox 工具库）
   let catExports, cheerioExports, gbkExports, simExports, httpLib;
   try {
@@ -248,6 +251,16 @@ function buildSandbox({ logs, requests }) {
     if (!headers['User-Agent']) headers['User-Agent'] = 'Mozilla/5.0 (TVBox Spider Studio)';
     const method = (options.method || (options.body ? 'POST' : 'GET')).toUpperCase();
     let body = options.body;
+    // 兼容猫源约定的 postType='form' 的 data 字段（真机原生 _http 支持，Node fetch 需转成 body）
+    if (options.data != null) {
+      if (options.postType === 'form' || options.postType === 'data') {
+        body = new URLSearchParams(options.data).toString();
+        if (!headers['Content-Type']) headers['Content-Type'] = 'application/x-www-form-urlencoded';
+      } else {
+        body = typeof options.data === 'string' ? options.data : JSON.stringify(options.data);
+        if (!headers['Content-Type']) headers['Content-Type'] = 'application/json';
+      }
+    }
     if (body && typeof body !== 'string' && !(body instanceof Buffer)) {
       body = JSON.stringify(body);
       if (!headers['Content-Type']) headers['Content-Type'] = 'application/json';
@@ -349,6 +362,37 @@ function buildSandbox({ logs, requests }) {
     return CatCrypto.MD5(String(str)).toString();
   }
 
+  // desX：还原 FongMi cat 的 3DES 封装（与 aesX 同签名）
+  // 参数: desX(mode, inBase64, data, isBase64, key, outBase64, isNoPadding)
+  // mode 形如 "DESede/CBC/PKCS7Padding"（DESEDE=3DES），inBase64=true 表示 data 为 base64 密文（解密）
+  function desX(mode, inBase64, data, isBase64, key, outBase64, isNoPadding) {
+    if (outBase64 === undefined || outBase64 === null) outBase64 = inBase64;
+    const m = /^([A-Z0-9]+)\/([A-Z0-9]+)\/(.*)$/i.exec(String(mode));
+    const algo = ((m && m[1]) || 'DESEDE').toUpperCase();
+    const transform = ((m && m[2]) || 'ECB').toUpperCase();
+    const paddingName = m && m[3];
+    let padding = CatCrypto.pad.Pkcs7;
+    if (/No/i.test(paddingName || '')) padding = CatCrypto.pad.NoPadding;
+    if (/Zero/i.test(paddingName || '')) padding = CatCrypto.pad.ZeroPadding;
+
+    const cipher = /DESEDE/i.test(algo) ? CatCrypto.TripleDES : CatCrypto.DES;
+    const keyWA = isBase64 ? CatCrypto.enc.Base64.parse(String(key)) : CatCrypto.enc.Utf8.parse(String(key));
+    let dataWA;
+    if (inBase64) dataWA = CatCrypto.enc.Base64.parse(String(data));
+    else dataWA = CatCrypto.enc.Utf8.parse(String(data));
+    const modeObj = transform === 'CBC' ? CatCrypto.mode.CBC : CatCrypto.mode.ECB;
+
+    let result;
+    if (inBase64) {
+      const cipherParams = CatCrypto.lib.CipherParams.create({ ciphertext: dataWA });
+      result = cipher.decrypt(cipherParams, keyWA, { mode: modeObj, padding });
+    } else {
+      result = cipher.encrypt(dataWA, keyWA, { mode: modeObj, padding }).ciphertext;
+    }
+    if (outBase64) return CatCrypto.enc.Base64.stringify(result);
+    return CatCrypto.enc.Utf8.stringify(result);
+  }
+
   async function sniff(url) {
     logs.push('[sniff] ' + url + ' （调试环境返回原样）');
     return url;
@@ -404,13 +448,27 @@ function buildSandbox({ logs, requests }) {
     logs.push('[importJs] ' + name + ' （调试环境未实现，跳过）');
   }
 
+  // 模拟真机 local KV 存储（按源文件隔离）
+  const _ns = _localStore[sourcePath] || (_localStore[sourcePath] = {});
+  const local = {
+    get: (k, d) => (Object.prototype.hasOwnProperty.call(_ns, k) ? _ns[k] : d),
+    set: (k, v) => { _ns[k] = v; },
+  };
+
+  // js2Proxy：真机返回播放代理地址；调试环境返回一个占位标记（实际播放 URL 由 play 直接给出）
+  function js2Proxy(flag, siteType, siteKey, url, header) {
+    return 'js2proxy://' + siteType + '/' + siteKey + '/' + url;
+  }
+
   // 基本浏览器 API 兜底
   const sandbox = {
     console: consoleCapture,
     req,
     http,
     aesX,
+    desX,
     md5X,
+    MD5: CatCrypto.MD5 || md5X,
     sniff,
     base64,
     json,
@@ -422,6 +480,9 @@ function buildSandbox({ logs, requests }) {
     pdfl,
     debugLog,
     importJs,
+    local,
+    js2Proxy,
+    getProxy: (p) => { logs.push('[getProxy] ' + p + ' （调试环境返回原样）'); return p; },
     atob: (s) => Buffer.from(String(s), 'base64').toString('binary'),
     btoa: (s) => Buffer.from(String(s), 'binary').toString('base64'),
     fetch,
@@ -503,7 +564,7 @@ async function runJsSource({ path, method, args, ext, config }) {
     return { ok: false, error: '源码改写失败: ' + e.message, logs, requests };
   }
 
-  const sandbox = buildSandbox({ logs, requests });
+  const sandbox = buildSandbox({ logs, requests, sourcePath: path });
   try {
     vm.runInNewContext(code, sandbox, { timeout: 30000 });
   } catch (e) {

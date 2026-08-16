@@ -51,9 +51,10 @@ async function simRun(kind, p) {
   const isJs = currentFile.type === 'js';
   const m = simMap(isJs);
   const args = simArgs(isJs, kind, p || {});
-  // 与调试台共用 ext 参数
-  const extEl = document.getElementById('dbg-ext');
-  const ext = (extEl && extEl.value.trim()) || '{}';
+  // 与调试台共用 ext 键值对，自动生成 JSON
+  const ext = (typeof getExtJson === 'function') ? getExtJson() : '{}';
+  // 模拟器运行时也把 ext 保存到当前源，便于动态源复用
+  if (typeof saveExt === 'function') saveExt();
   const body = isJs
     ? { path: currentFile.name, method: m[kind], args, ext }
     : { path: currentFile.name, method: m[kind], kwargs: args, ext };

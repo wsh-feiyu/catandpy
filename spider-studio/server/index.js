@@ -129,6 +129,44 @@ app.post('/api/file/rename', (req, res) => {
   }
 });
 
+// ============ 源 ext 配置持久化 ============
+// 按源文件名保存上次调试使用的 ext 参数，动态源（如 Hmys 需要 host/appid）打开即可复用
+const EXT_STORE = path.join(__dirname, 'ext-config.json');
+function readExtStore() {
+  try {
+    return JSON.parse(fs.readFileSync(EXT_STORE, 'utf-8'));
+  } catch (e) {
+    return {};
+  }
+}
+function writeExtStore(store) {
+  fs.writeFileSync(EXT_STORE, JSON.stringify(store, null, 2), 'utf-8');
+}
+
+app.get('/api/ext', (req, res) => {
+  try {
+    const store = readExtStore();
+    res.json({ ok: true, ext: store[req.query.path] || null });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/api/ext', (req, res) => {
+  if (!req.body.path || typeof req.body.path !== 'string') {
+    return res.status(400).json({ ok: false, error: '缺少 path' });
+  }
+  try {
+    const store = readExtStore();
+    if (req.body.ext == null || String(req.body.ext).trim() === '') delete store[req.body.path];
+    else store[req.body.path] = String(req.body.ext);
+    writeExtStore(store);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // ============ 模板 / 向导 ============
 app.get('/api/templates', (req, res) => {
   res.json({ ok: true, templates: getTemplates() });

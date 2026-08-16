@@ -133,6 +133,7 @@ async function openFile(name) {
     editor.setModel(model);
     setupDebug(type);
     highlightActive();
+    loadExt(name); // 打开源时自动加载该源保存过的 ext
     // 打开新源文件时重置模拟器，下次切到「模拟器」tab 自动按新文件重新加载
     if (typeof simReset === 'function') simReset();
   } catch (e) {
@@ -160,6 +161,84 @@ async function saveFile() {
 }
 
 // ============ 调试面板 ============
+// ============ ext 键值对编辑 ============
+// 每个源的 ext 键值不同，用动态"key + value"行编辑，自动拼成 JSON 字符串传给后端。
+// value 输入的内容若是合法 JSON 字面量（数字/布尔/对象/数组/null）则按原类型生成，否则作为字符串。
+
+// 添加一行键值对
+function addExtRow(key, value) {
+  const wrap = document.createElement('div');
+  wrap.className = 'ext-row';
+  const k = document.createElement('input');
+  k.className = 'ext-key';
+  k.placeholder = 'key';
+  k.value = key == null ? '' : String(key);
+  const v = document.createElement('input');
+  v.className = 'ext-val';
+  v.placeholder = 'value';
+  v.value = value == null ? '' : String(value);
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'ext-del';
+  del.title = '删除';
+  del.textContent = '×';
+  del.addEventListener('click', () => wrap.remove());
+  wrap.appendChild(k);
+  wrap.appendChild(v);
+  wrap.appendChild(del);
+  $('ext-fields').appendChild(wrap);
+}
+
+// 清空所有键值对
+function clearExtFields() {
+  const c = $('ext-fields');
+  if (c) c.innerHTML = '';
+}
+
+// 收集当前键值对，生成 ext JSON 字符串
+function getExtJson() {
+  const obj = {};
+  document.querySelectorAll('#ext-fields .ext-row').forEach((row) => {
+    const k = row.querySelector('.ext-key').value.trim();
+    const v = row.querySelector('.ext-val').value.trim();
+    if (!k) return; // 空 key 忽略
+    let val = v;
+    // 仅当以 { 或 [ 开头时尝试解析为对象/数组；普通键值（如 versionCode="11000"）保持字符串所见即所得
+    if (v !== '' && /^[\[{]/.test(v)) {
+      try { val = JSON.parse(v); } catch (e) { /* 保留字符串 */ }
+    }
+    obj[k] = val;
+  });
+  return Object.keys(obj).length ? JSON.stringify(obj) : '{}';
+}
+
+// 打开源文件时加载该源保存过的 ext 参数（解析成键值对行）
+async function loadExt(name) {
+  try {
+    const data = await api('/api/ext?path=' + encodeURIComponent(name));
+    const ext = data.ext || '{}';
+    clearExtFields();
+    let obj = {};
+    try { obj = JSON.parse(ext); } catch (e) { /* 非法 JSON 按空处理 */ }
+    if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+      Object.keys(obj).forEach((k) => addExtRow(k, obj[k]));
+    }
+    if (!Object.keys(obj).length) addExtRow('', '');
+  } catch (e) {
+    /* 无保存记录或请求失败时保持空 */
+  }
+}
+
+// 把当前 ext 键值对保存到当前源，动态源（如 Hmys 需要 host/appid）可跨会话复用
+async function saveExt() {
+  if (!currentFile) return;
+  try {
+    await post('/api/ext', { path: currentFile.name, ext: getExtJson() });
+  } catch (e) {
+    /* 保存失败不阻断调试 */
+  }
+}
+
 function setupDebug(type) {
   const sel = $('dbg-method');
   sel.innerHTML = '';
@@ -190,7 +269,7 @@ function parseArgsInput() {
 async function runDebug() {
   if (!currentFile) return alert('请先打开一个源文件');
   const method = $('dbg-method').value;
-  const ext = $('dbg-ext').value.trim() || '{}';
+  const ext = getExtJson();
   let args;
   try {
     args = parseArgsInput();
@@ -203,6 +282,8 @@ async function runDebug() {
   btn.textContent = '运行中…';
   showTab('result', '<pre>正在执行 ' + method + '() …</pre>');
   try {
+    // 自动保存当前 ext，模拟器下次运行时即可使用
+    saveExt();
     let data;
     if (currentFile.type === 'js') {
       data = await post('/api/debug/js', { path: currentFile.name, method, args, ext });
@@ -345,6 +426,7 @@ function initEvents() {
   $('btn-save').addEventListener('click', saveFile);
   $('btn-run').addEventListener('click', runDebug);
   $('dbg-method').addEventListener('change', onMethodChange);
+  $('btn-add-ext').addEventListener('click', () => addExtRow('', ''));
   $('btn-close-modal').addEventListener('click', closeWizard);
   $('btn-wizard-cancel').addEventListener('click', closeWizard);
   $('btn-wizard-ok').addEventListener('click', wizardOk);
