@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TVBox Spider Studio</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
+</head>
+<body>
+  <!-- 顶栏 -->
+  <header>
+    <div class="logo">TVBox Spider Studio</div>
+    <span class="env" id="env-info">加载中…</span>
+    <div class="spacer"></div>
+    <button id="btn-refresh">刷新列表</button>
+    <button id="btn-new">新建源</button>
+    <button id="btn-save" class="primary">保存 Ctrl+S</button>
+  </header>
+
+  <!-- 主区域 -->
+  <main>
+    <!-- 左侧文件列表 -->
+    <aside id="files">
+      <div class="f-header">
+        <span>源文件</span>
+        <button id="btn-new2" style="font-size:11px;padding:2px 8px;">+ 新建</button>
+      </div>
+      <ul id="file-list"></ul>
+    </aside>
+
+    <!-- 中间编辑器 -->
+    <section id="editor-area">
+      <div class="e-toolbar">
+        <span class="fname" id="cur-name">未打开文件</span>
+        <span class="dirty" id="dirty-mark"></span>
+      </div>
+      <div id="editor"></div>
+    </section>
+
+    <!-- 右侧调试面板 -->
+    <aside id="debug">
+      <div class="d-header">调试台 — 模拟 TVBox 运行时</div>
+      <div class="d-body">
+        <div>
+          <label>调用方法</label>
+          <select id="dbg-method"></select>
+        </div>
+        <div>
+          <label id="dbg-args-label">参数（JSON）</label>
+          <textarea id="dbg-args" placeholder='["电影","1",true,{}]'></textarea>
+        </div>
+        <div class="row">
+          <div>
+            <label>ext / extend 参数</label>
+            <input id="dbg-ext" value="{}" placeholder='{"key":"xxx","version":"1.0"}' />
+          </div>
+          <button id="btn-run" class="primary" style="flex:none;padding:7px 18px;">运行</button>
+        </div>
+        <div class="row">
+          <div>
+            <label id="dbg-fast-label">快速填充默认参数</label>
+            <select id="dbg-fast"></select>
+          </div>
+        </div>
+
+        <div id="result-area">
+          <div id="result-tabs">
+            <div class="rtab active" data-tab="result">结果</div>
+            <div class="rtab" data-tab="logs">日志</div>
+            <div class="rtab" data-tab="requests">请求</div>
+            <div class="rtab" data-tab="stdout">stdout</div>
+            <div class="rtab" data-tab="error">错误</div>
+          </div>
+          <div id="result-view"><pre>运行后在此查看输出</pre></div>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- 向导弹窗 -->
+  <div id="modal-mask">
+    <div id="modal">
+      <div class="m-head">
+        <span>新建 TVBox 源（向导）</span>
+        <button id="btn-close-modal" style="background:none;border:none;color:var(--fg-dim);font-size:16px;cursor:pointer;">✕</button>
+      </div>
+      <div class="m-body">
+        <div>
+          <label>站点名称</label>
+          <input id="wz-name" placeholder="例如：我的影视" />
+        </div>
+        <div>
+          <label>生成语言</label>
+          <div class="radio-group">
+            <label><input type="radio" name="wz-lang" value="both" checked /> JS + PY 双端</label>
+            <label><input type="radio" name="wz-lang" value="js" /> 仅 JS</label>
+            <label><input type="radio" name="wz-lang" value="py" /> 仅 PY</label>
+          </div>
+        </div>
+        <div>
+          <label>站点域名（host）</label>
+          <input id="wz-host" placeholder="https://example.com" />
+        </div>
+        <div>
+          <label>ext 扩展参数示例（JSON 字符串，可选）</label>
+          <input id="wz-ext" placeholder='{"key":"xxx","version":"1.0"}' />
+          <div class="hint">留空则写 {}。若站点需要密钥/版本等可在此填写。</div>
+        </div>
+        <div>
+          <label>首页分类（每行一个，格式：type_id,type_name）</label>
+          <textarea id="wz-classes" placeholder="剧集,剧集&#10;电影,电影&#10;综艺,综艺">剧集,剧集
+电影,电影
+综艺,综艺
+动漫,动漫</textarea>
+        </div>
+        <div>
+          <label>生成文件名（不含扩展名）</label>
+          <input id="wz-file" placeholder="默认用站点名" />
+        </div>
+      </div>
+      <div class="m-foot">
+        <button id="btn-wizard-cancel">取消</button>
+        <button id="btn-wizard-ok" class="primary">生成并打开</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="completions.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

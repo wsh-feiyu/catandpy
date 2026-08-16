@@ -1,0 +1,16 @@
+# Node 依赖
+node_modules/
+
+# Python 缓存
+__pycache__/
+*.pyc
+
+# 运行时临时输出
+spider-studio/server/out_tmp.json
+
+# 调试/验证临时脚本（spider-studio 根目录下以 _ 开头的 .js）
+spider-studio/_*.js
+
+# 系统文件
+.DS_Store
+Thumbs.db

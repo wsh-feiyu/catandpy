@@ -1,0 +1,14 @@
+{
+  "name": "tvbox-spider-studio",
+  "version": "1.0.0",
+  "description": "TVBox JS/PY 源编写调试框架（参考 FongMi/TV SPIDER 规范）",
+  "main": "server/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server/index.js"
+  },
+  "dependencies": {
+    "crypto-js": "^4.2.0",
+    "express": "^4.19.2"
+  }
+}
