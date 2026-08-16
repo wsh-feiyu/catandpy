@@ -136,6 +136,8 @@ async function openFile(name) {
     loadExt(name); // 打开源时自动加载该源保存过的 ext
     // 打开新源文件时重置模拟器，下次切到「模拟器」tab 自动按新文件重新加载
     if (typeof simReset === 'function') simReset();
+    // 窄屏下打开文件后自动切到编辑器视图
+    if (window.innerWidth <= 820) mobileShowArea('editor-area');
   } catch (e) {
     alert('打开失败: ' + e.message);
   }
@@ -449,6 +451,26 @@ function initEvents() {
       saveFile();
     }
   });
+
+  // 移动端底部导航：切换「编辑器 / 源文件 / 调试」三个视图
+  const nav = $('mobile-nav');
+  if (nav) {
+    nav.querySelectorAll('.m-tab').forEach((b) => {
+      b.addEventListener('click', () => mobileShowArea(b.dataset.show));
+    });
+  }
+}
+
+// 窄屏下切换显示某个区域（files / editor-area / debug），并让编辑器重算尺寸
+function mobileShowArea(id) {
+  const nav = $('mobile-nav');
+  if (!nav) return;
+  nav.querySelectorAll('.m-tab').forEach((b) => b.classList.toggle('active', b.dataset.show === id));
+  ['files', 'editor-area', 'debug'].forEach((pid) => {
+    const node = $(pid);
+    if (node) node.classList.toggle('active', pid === id);
+  });
+  if (editor) setTimeout(() => editor.layout(), 50);
 }
 
 async function loadEnv() {
