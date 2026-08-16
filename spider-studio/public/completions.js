@@ -6,11 +6,18 @@
 // JS 源：QuickJS 内置函数 + cat.js + 接口骨架
 const JS_SUGGESTIONS = [
   {
+    label: 'init(ext)',
+    kind: 'Function',
+    insertText: 'async function init(ext) {\n    // ext 为扩展参数对象（调试台填写），如 { host, appid, versionCode }\n    ${1}\n}',
+    detail: '源初始化（可选，读取 ext 参数）',
+    doc: 'TVBox 在首次加载源时调用，用于解析 ext 扩展参数（JSON 字符串）。常见的动态源会在此把参数保存到 local 供后续方法使用。示例：\nconst { host, appid } = JSON.parse(ext);\nlocal.set(\'host\', host);',
+  },
+  {
     label: 'req(url, opt)',
     kind: 'Function',
     insertText: 'await req(${1:url}${2:, { headers: { \'User-Agent\': \'...\' } }})',
     detail: 'HTTP 请求，返回 {content, code, json(), html()}',
-    doc: '请求接口。opt 支持 {method, headers, body, ua, redirect}。返回对象含 .content(文本)、.json()、.html()、.code。',
+    doc: '发起 HTTP 请求。opt 支持：{method, headers, body, postType, data, ua, redirect}。\n- postType=\'form\' 时自动将 data 对象转为 URLSearchParams 并设为 body\n- data 为对象时自动序列化，为字符串时直接作为 body\n- 返回对象含 .content(文本)、.json()、.html()、.code。',
   },
   {
     label: 'aesX(mode, encrypt, input, inBase64, key, iv, outBase64)',
@@ -48,6 +55,69 @@ const JS_SUGGESTIONS = [
     doc: '返回小写 hex MD5。',
   },
   {
+    label: 'MD5(str)',
+    kind: 'Function',
+    insertText: 'MD5(${1:str}).toString()',
+    detail: 'MD5 哈希（cat.js 的 Crypto.MD5）',
+    doc: '等价于 md5X，来自 assets://js/lib/cat.js 的 CryptoJS。',
+  },
+  {
+    label: 'json(content)',
+    kind: 'Function',
+    insertText: 'JSON.parse(${1:content})',
+    detail: '解析 JSON 字符串',
+    doc: '全局 json() 等价于 JSON.parse；调试台也可直接用 JSON.parse。',
+  },
+  {
+    label: 'html(content)',
+    kind: 'Function',
+    insertText: '${1:content}',
+    detail: 'HTML 内容（调试版原样返回）',
+    doc: '全局 html() 在真机上用于解析 HTML，调试环境原样返回字符串。',
+  },
+  {
+    label: 'local.get(key, def)',
+    kind: 'Function',
+    insertText: 'local.get(${1:\'key\'}${2:, ${3:default}});',
+    detail: '读取本机 KV 存储（按源文件隔离）',
+    doc: '模拟真机 QuickJS 的本地存储，按源文件隔离命名空间。local.get(\'k\', def) 取值，不存在时返回 def。',
+  },
+  {
+    label: 'local.set(key, value)',
+    kind: 'Function',
+    insertText: 'local.set(${1:\'key\'}, ${2:value});',
+    detail: '写入本机 KV 存储（按源文件隔离）',
+    doc: '跨调试请求持久化（如 deviceid、host 等）。local.set(\'k\', v)。',
+  },
+  {
+    label: 'importJs(name)',
+    kind: 'Function',
+    insertText: 'importJs(${1:\'assets://js/lib/cat.js\'});',
+    detail: '加载额外 JS 库',
+    doc: '调试环境仅记录日志，不实际执行。真机上用于按需加载依赖库。',
+  },
+  {
+    label: 'debugLog(...args)',
+    kind: 'Function',
+    insertText: 'debugLog(${1:msg});',
+    detail: '调试日志（显示在调试台日志页）',
+    doc: '输出到调试台日志页，带 [debug] 前缀，与 console.log 效果类似。',
+  },
+  {
+    label: 'getProxy(local)',
+    kind: 'Function',
+    insertText: 'getProxy(${1:false})',
+    detail: '返回本地代理地址',
+    doc: 'local=true 返回 127.0.0.1，否则返回默认代理地址。',
+  },
+  {
+    label: 'js2Proxy(dynamic, siteType, siteKey, url, headers)',
+    kind: 'Function',
+    insertText: 'js2Proxy(${1:true}, ${2:\'嗅探\'}, ${3:\'key\'}, ${4:url}, ${5:{}})',
+    detail: '返回播放代理地址',
+    doc: 'dynamic=是否动态源，siteType=站点类型，siteKey=站点标识，url=播放地址，headers=自定义请求头。',
+  },
+  {
     label: 'sniff(url)',
     kind: 'Function',
     insertText: 'await sniff(${1:url})',
@@ -67,6 +137,18 @@ const JS_SUGGESTIONS = [
     detail: 'Base64 解码',
   },
   {
+    label: 'base64.b64encode(buf)',
+    kind: 'Function',
+    insertText: 'base64.b64encode(${1:buffer})',
+    detail: '字节缓冲区转 Base64',
+  },
+  {
+    label: 'base64.b64decode(str)',
+    kind: 'Function',
+    insertText: 'base64.b64decode(${1:str})',
+    detail: 'Base64 转字节缓冲区',
+  },
+  {
     label: 'pd(html, rule)',
     kind: 'Function',
     insertText: 'pd(${1:html}, \'${2:正则}\')',
@@ -83,19 +165,34 @@ const JS_SUGGESTIONS = [
     kind: 'Function',
     insertText: 'pdfa(${1:html}, \'${2:规则}\')',
     detail: '取所有匹配',
+    doc: '返回所有匹配结果数组，规则形如 正则 或 正则&&拼接URL前缀。',
+  },
+  {
+    label: 'pdyh(html, rule)',
+    kind: 'Function',
+    insertText: 'pdyh(${1:html}, \'${2:规则}\')',
+    detail: '取第一个匹配（自动补全相对地址）',
+    doc: '与 pdfh 类似，返回第一个匹配结果。',
+  },
+  {
+    label: 'pdfl(html, rule)',
+    kind: 'Function',
+    insertText: 'pdfl(${1:html}, \'${2:规则}\')',
+    detail: '取列表（同 pdfa）',
+    doc: '返回匹配列表数组，通常配合 pdfh/pd 使用。',
   },
   {
     label: 'Crypto.enc.Base64.parse(str)',
     kind: 'Function',
     insertText: 'Crypto.enc.Base64.parse(${1:str})',
-    detail: 'Base64 -> WordArray',
+    detail: 'Base64 字符串转为 WordArray',
     doc: '来自 assets://js/lib/cat.js 的 CryptoJS。',
   },
   {
     label: 'Crypto.enc.Utf8.stringify(wa)',
     kind: 'Function',
     insertText: 'Crypto.enc.Utf8.stringify(${1:wordArray})',
-    detail: 'WordArray -> UTF8 字符串',
+    detail: 'WordArray 转为 UTF8 字符串',
   },
   {
     label: 'Crypto.lib.WordArray.create(words, sigBytes)',
@@ -107,7 +204,7 @@ const JS_SUGGESTIONS = [
     label: 'Crypto.MD5(str)',
     kind: 'Function',
     insertText: 'Crypto.MD5(${1:str}).toString()',
-    detail: 'MD5',
+    detail: 'MD5 哈希',
   },
   {
     label: 'console.log(...)',
@@ -162,7 +259,7 @@ const JS_SUGGESTIONS = [
     kind: 'Function',
     insertText: 'await http(${1:url}${2:, { headers: { \'User-Agent\': \'...\' } }})',
     detail: 'HTTP 请求（真实 http.js 的 http，异步返回 Promise）',
-    doc: '与 req 等价。opt 支持 {method, headers, body, ua, async, complete}。返回对象含 .content/.code/.json()/.html()。',
+    doc: '与 req 等价。opt 支持 {method, headers, body, postType, data, ua, async, complete}。postType=\'form\' 时 data 对象自动转为 URLSearchParams。返回对象含 .content/.code/.json()/.html()。',
   },
   {
     label: 'gbkTool()',
@@ -288,6 +385,8 @@ function initMonaco(cb) {
   require(['vs/editor/editor.main'], function () {
     monacoReady = true;
     registerCompletions();
+    registerJsTypes();
+    registerHoverProviders();
     pendingCallbacks.splice(0).forEach((c) => c(monaco));
   });
 }
@@ -327,4 +426,80 @@ function registerCompletions() {
       return { suggestions: items };
     },
   });
+}
+
+// ============ JS 全局类型声明（让悬停显示签名而非裸 any） ============
+// 由补全项自动生成 declare function / declare const，注入 JS 语言服务，
+// 使 req / aesX / joinUrl 等全局函数在悬停时显示正确签名。
+function buildJsDeclarations() {
+  const funcs = []; // 顶层函数
+  const objMethods = {}; // 对象 -> 方法列表（如 base64.encode）
+  for (const s of JS_SUGGESTIONS) {
+    const m = /^([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\(([^)]*)\)$/.exec(s.label);
+    if (!m) continue;
+    const full = m[1];
+    const params = m[2]
+      .split(',')
+      .map((p) => p.trim().replace(/^\.\.\./, ''))
+      .filter(Boolean);
+    const sig = '(' + params.map((p) => p + ': any').join(', ') + '): any';
+    const dot = full.indexOf('.');
+    if (dot === -1) {
+      funcs.push('declare function ' + full + sig + ';');
+    } else {
+      const obj = full.slice(0, dot);
+      const method = full.slice(dot + 1);
+      (objMethods[obj] = objMethods[obj] || []).push(method + sig);
+    }
+  }
+  const lines = funcs.slice();
+  for (const obj of Object.keys(objMethods)) {
+    lines.push('declare const ' + obj + ': { ' + objMethods[obj].join('; ') + ' };');
+  }
+  return lines.join('\n');
+}
+
+function registerJsTypes() {
+  try {
+    monaco.languages.typescript.javascriptDefaults.addExtraLib(buildJsDeclarations(), 'tvbox-globals.d.ts');
+  } catch (e) {
+    // 语言服务不可用则忽略
+  }
+}
+
+// ============ 悬停提示（Hover）：显示中文说明而非 only any ============
+function buildHoverMap(list) {
+  const map = {};
+  for (const s of list) {
+    const m = /^([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)/.exec(s.label);
+    if (!m) continue;
+    const name = m[1];
+    if (!map[name]) map[name] = { label: s.label, detail: s.detail || '', doc: s.doc || '' };
+  }
+  return map;
+}
+
+function registerHoverProviders() {
+  const jsHover = buildHoverMap(JS_SUGGESTIONS);
+  const pyHover = buildHoverMap(PY_SUGGESTIONS);
+  const mk = (map) => (model, position) => {
+    const word = model.getWordAtPosition(position);
+    if (!word) return null;
+    // 支持 base64.encode 这类带点的完整名
+    const line = model.getLineContent(position.lineNumber);
+    const before = line.slice(0, position.column - 1);
+    const m = /([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)$/.exec(before);
+    const name = (m && m[1]) || word.word;
+    const info = map[name];
+    if (!info) return null;
+    const contents = [{ value: '```\n' + info.label + '\n```' }];
+    if (info.detail) contents.push({ value: info.detail });
+    if (info.doc) contents.push({ value: info.doc.replace(/\n/g, '  \n') });
+    return {
+      contents,
+      range: new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn),
+    };
+  };
+  monaco.languages.registerHoverProvider('javascript', { provideHover: mk(jsHover) });
+  monaco.languages.registerHoverProvider('python', { provideHover: mk(pyHover) });
 }
